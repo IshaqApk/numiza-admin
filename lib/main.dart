@@ -16,9 +16,9 @@ Future<void> main() async {
   }
 
   await Supabase.initialize(
-    url: supabaseUrl,
-    anonKey: supabasePublishableKey,
-  );
+  url: supabaseUrl,
+  publishableKey: supabasePublishableKey,
+);
 
   runApp(const NumizaAdminApp());
 }
