@@ -1297,6 +1297,47 @@ class _UsersPageState extends State<_UsersPage> {
     super.dispose();
   }
 
+  Future<void> _toggleUserStatus(Map<String, dynamic> user) async {
+  final userId = user['id']?.toString();
+
+  if (userId == null || userId.isEmpty) {
+    return;
+  }
+
+  final currentStatus = user['is_active'] == true;
+
+  try {
+    await Supabase.instance.client
+        .from('profiles')
+        .update({
+          'is_active': !currentStatus,
+        })
+        .eq('id', userId);
+
+    if (!mounted) return;
+
+    await _loadUsers();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          !currentStatus
+              ? 'تم تفعيل الحساب بنجاح'
+              : 'تم تعطيل الحساب بنجاح',
+        ),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تعذر تغيير حالة الحساب'),
+      ),
+    );
+  }
+}
+
   Future<void> _loadUsers() async {
     if (!mounted) return;
 
@@ -1309,7 +1350,7 @@ class _UsersPageState extends State<_UsersPage> {
       final response = await Supabase.instance.client
           .from('profiles')
           .select(
-            'id, full_name, phone, role, driver_status, created_at',
+            'id, full_name, phone, role, driver_status, is_active, created_at',
           )
           .order(
             'created_at',
