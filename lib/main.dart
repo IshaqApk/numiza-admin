@@ -4227,7 +4227,7 @@ class _DialogSectionTitle extends StatelessWidget {
   }
 }
 
-class _UrlDetail extends StatelessWidget {
+class _UrlDetail extends StatefulWidget {
   final String label;
   final dynamic url;
 
@@ -4237,30 +4237,140 @@ class _UrlDetail extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final rawUrl = url?.toString().trim() ?? '';
+  State<_UrlDetail> createState() => _UrlDetailState();
+}
 
-    if (rawUrl.isEmpty || rawUrl == 'null') {
+class _UrlDetailState extends State<_UrlDetail> {
+  String? imageUrl;
+  String? errorMessage;
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDocument();
+  }
+
+  Future<void> _loadDocument() async {
+    final rawPath = widget.url?.toString().trim() ?? '';
+
+    if (rawPath.isEmpty || rawPath == 'null') {
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      String path = rawPath;
+
+      // إذا كانت القيمة المخزنة رابط Supabase كامل
+      // نستخرج منه مسار الملف داخل Bucket.
+      if (path.startsWith('http://') ||
+          path.startsWith('https://')) {
+        final uri = Uri.parse(path);
+
+        const marker = '/storage/v1/object/';
+        final index = uri.path.indexOf(marker);
+
+        if (index != -1) {
+          var storagePath =
+              uri.path.substring(index + marker.length);
+
+          // public/driver-documents/...
+          // authenticated/driver-documents/...
+          // sign/driver-documents/...
+          final parts = storagePath.split('/');
+
+          if (parts.isNotEmpty) {
+            if (parts.first == 'public' ||
+                parts.first == 'authenticated' ||
+                parts.first == 'sign') {
+              parts.removeAt(0);
+            }
+          }
+
+          if (parts.isNotEmpty &&
+              parts.first == 'driver-documents') {
+            parts.removeAt(0);
+          }
+
+          path = parts.join('/');
+        }
+      }
+
+      // إنشاء رابط مؤقت للوثيقة.
+      final signedUrl = await supabase.storage
+          .from('driver-documents')
+          .createSignedUrl(
+            path,
+            60 * 60,
+          );
+
+      if (!mounted) return;
+
+      setState(() {
+        imageUrl = signedUrl;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+        errorMessage = e.toString();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
       return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.only(bottom: 16),
         child: Container(
-          padding: const EdgeInsets.all(12),
+          height: 120,
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
+            border: Border.all(
+              color: const Color(0xFFE8E8F0),
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
+    if (imageUrl == null || imageUrl!.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.red.shade100,
+            ),
           ),
           child: Row(
             children: [
               Icon(
-                Icons.image_not_supported_outlined,
-                color: Colors.grey.shade500,
+                Icons.error_outline,
+                color: Colors.red.shade700,
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '$label: غير مرفقة',
+                  errorMessage == null
+                      ? '${widget.label}: الوثيقة غير موجودة'
+                      : '${widget.label}: تعذر تحميل الوثيقة',
                   style: TextStyle(
-                    color: Colors.grey.shade600,
+                    color: Colors.red.shade700,
                   ),
                 ),
               ),
@@ -4298,7 +4408,7 @@ class _UrlDetail extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      label,
+                      widget.label,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                       ),
@@ -4308,18 +4418,17 @@ class _UrlDetail extends StatelessWidget {
               ),
             ),
 
-            // معاينة الوثيقة
             SizedBox(
               height: 220,
               child: Image.network(
-                rawUrl,
+                imageUrl!,
                 fit: BoxFit.contain,
                 loadingBuilder: (
                   context,
                   child,
-                  loadingProgress,
+                  progress,
                 ) {
-                  if (loadingProgress == null) {
+                  if (progress == null) {
                     return child;
                   }
 
@@ -4332,34 +4441,9 @@ class _UrlDetail extends StatelessWidget {
                   error,
                   stackTrace,
                 ) {
-                  return Container(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.broken_image_outlined,
-                          size: 42,
-                          color: Colors.grey.shade500,
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          'تعذر تحميل الوثيقة',
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'تحقق من صلاحيات Storage والرابط',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                  return const Center(
+                    child: Text(
+                      'تعذر عرض الوثيقة',
                     ),
                   );
                 },
@@ -4374,15 +4458,15 @@ class _UrlDetail extends StatelessWidget {
                 onPressed: () {
                   _showFullImage(
                     context,
-                    label,
-                    rawUrl,
+                    widget.label,
+                    imageUrl!,
                   );
                 },
                 icon: const Icon(
                   Icons.zoom_in,
                 ),
                 label: const Text(
-                  'عرض الوثيقة بالحجم الكامل',
+                  'عرض بالحجم الكامل',
                 ),
               ),
             ),
@@ -4408,7 +4492,7 @@ class _UrlDetail extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 12,
+                  vertical: 10,
                 ),
                 child: Row(
                   children: [
@@ -4438,36 +4522,6 @@ class _UrlDetail extends StatelessWidget {
                   child: Image.network(
                     url,
                     fit: BoxFit.contain,
-                    loadingBuilder: (
-                      context,
-                      child,
-                      loadingProgress,
-                    ) {
-                      if (loadingProgress == null) {
-                        return child;
-                      }
-
-                      return const SizedBox(
-                        height: 400,
-                        child: Center(
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-                    },
-                    errorBuilder: (
-                      context,
-                      error,
-                      stackTrace,
-                    ) {
-                      return const SizedBox(
-                        height: 300,
-                        child: Center(
-                          child: Text(
-                            'تعذر تحميل الوثيقة',
-                          ),
-                        ),
-                      );
-                    },
                   ),
                 ),
               ),
