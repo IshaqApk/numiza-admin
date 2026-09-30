@@ -1883,12 +1883,38 @@ class _UsersPageState extends State<_UsersPage> {
                     ),
                   ),
                 const Spacer(),
+
                 Text(
-                  _formatDate(user['created_at']),
+                _formatDate(user['created_at']),
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF9999AA),
                   ),
+                ),
+
+                const SizedBox(width: 8),
+
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => _toggleUserStatus(user),
+                  child: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: user['is_active'] == true
+                            ? const Color(0xFFFFEEEE)
+                            : const Color(0xFFEFFBF5),
+                borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      user['is_active'] == true
+                          ? Icons.block_rounded
+                          : Icons.check_circle_rounded,
+                      size: 18,
+                      color: user['is_active'] == true
+                           ? Colors.red
+                           : const Color(0xFF19A974),
+                  ),
+                 ),
                 ),
               ],
             ),
