@@ -329,19 +329,7 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int selectedIndex = 0;
-
-  Future<void> logout(BuildContext context) async {
-    await Supabase.instance.client.auth.signOut();
-
-    if (!context.mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => const AdminLoginScreen(),
-      ),
-      (route) => false,
-    );
-  }
+  bool sidebarOpen = false;
 
   final List<Widget> pages = const [
     _DashboardOverview(),
@@ -402,24 +390,141 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     ),
   ];
 
+  Future<void> logout(BuildContext context) async {
+    await Supabase.instance.client.auth.signOut();
+
+    if (!context.mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const AdminLoginScreen(),
+      ),
+      (route) => false,
+    );
+  }
+
+  bool _isMobile(double width) {
+    return width < 700;
+  }
+
+  void _selectPage(int index) {
+    setState(() {
+      selectedIndex = index;
+      sidebarOpen = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF7F7FC),
-        body: Row(
-          children: [
-            _buildSidebar(),
-            Expanded(
-              child: Column(
-                children: [
-                  _buildTopBar(),
-                  Expanded(
-                    child: pages[selectedIndex],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final mobile = _isMobile(constraints.maxWidth);
+
+          return Scaffold(
+            backgroundColor: const Color(0xFFF7F7FC),
+            drawer: mobile ? _buildDrawer() : null,
+            appBar: mobile ? _buildMobileAppBar() : null,
+            body: Row(
+              children: [
+                if (!mobile) _buildSidebar(),
+                Expanded(
+                  child: Column(
+                    children: [
+                      if (!mobile) _buildDesktopTopBar(),
+                      Expanded(
+                        child: pages[selectedIndex],
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildMobileAppBar() {
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 0,
+      surfaceTintColor: Colors.white,
+      leading: Builder(
+        builder: (context) {
+          return IconButton(
+            tooltip: 'القائمة',
+            icon: const Icon(Icons.menu_rounded),
+            onPressed: () {
+              Scaffold.of(context).openDrawer();
+            },
+          );
+        },
+      ),
+      title: Text(
+        menuItems[selectedIndex].title,
+        style: const TextStyle(
+          fontSize: 19,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF151525),
+        ),
+      ),
+      actions: [
+        IconButton(
+          tooltip: 'تسجيل الخروج',
+          onPressed: () => logout(context),
+          icon: const Icon(Icons.logout_rounded),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      width: 280,
+      backgroundColor: const Color(0xFF151525),
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 28),
+
+            const Text(
+              'NUMIZA',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
               ),
+            ),
+
+            const SizedBox(height: 6),
+
+            const Text(
+              'لوحة الإدارة',
+              style: TextStyle(
+                color: Color(0xFFB8B8C8),
+                fontSize: 13,
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: menuItems.length,
+                itemBuilder: (context, index) {
+                  return _buildMenuItem(index);
+                },
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: _buildLogoutButton(),
             ),
           ],
         ),
@@ -463,93 +568,107 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 itemCount: menuItems.length,
                 itemBuilder: (context, index) {
-                  final item = menuItems[index];
-                  final selected = selectedIndex == index;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () {
-                        setState(() {
-                          selectedIndex = index;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 13,
-                        ),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? const Color(0xFF5B4FE9)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              item.icon,
-                              color: selected
-                                  ? Colors.white
-                                  : const Color(0xFFB8B8C8),
-                              size: 21,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              item.title,
-                              style: TextStyle(
-                                color: selected
-                                    ? Colors.white
-                                    : const Color(0xFFD0D0DA),
-                                fontSize: 14,
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
+                  return _buildMenuItem(index);
                 },
               ),
             ),
 
             Padding(
               padding: const EdgeInsets.all(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => logout(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 13,
+              child: _buildLogoutButton(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuItem(int index) {
+    final item = menuItems[index];
+    final selected = selectedIndex == index;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          _selectPage(index);
+
+          if (Navigator.canPop(context)) {
+            Navigator.of(context).pop();
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 13,
+          ),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFF5B4FE9)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                item.icon,
+                color: selected
+                    ? Colors.white
+                    : const Color(0xFFB8B8C8),
+                size: 21,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  item.title,
+                  style: TextStyle(
+                    color: selected
+                        ? Colors.white
+                        : const Color(0xFFD0D0DA),
+                    fontSize: 14,
+                    fontWeight: selected
+                        ? FontWeight.w700
+                        : FontWeight.w500,
                   ),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: const Color(0xFF343446),
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.logout_rounded,
-                        color: Color(0xFFFF8A8A),
-                        size: 21,
-                      ),
-                      SizedBox(width: 12),
-                      Text(
-                        'تسجيل الخروج',
-                        style: TextStyle(
-                          color: Color(0xFFFF8A8A),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => logout(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color(0xFF343446),
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          children: [
+            Icon(
+              Icons.logout_rounded,
+              color: Color(0xFFFF8A8A),
+              size: 21,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'تسجيل الخروج',
+                style: TextStyle(
+                  color: Color(0xFFFF8A8A),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -559,7 +678,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildTopBar() {
+  Widget _buildDesktopTopBar() {
     return Container(
       height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -594,6 +713,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               color: Color(0xFF555566),
             ),
           ),
+          const SizedBox(width: 20),
+          IconButton(
+            tooltip: 'تسجيل الخروج',
+            onPressed: () => logout(context),
+            icon: const Icon(Icons.logout_rounded),
+          ),
         ],
       ),
     );
@@ -606,113 +731,121 @@ class _DashboardOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'مرحبًا بك في لوحة إدارة NUMIZA',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF151525),
-            ),
-          ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
 
-          const SizedBox(height: 8),
+        final horizontalPadding = width < 600 ? 16.0 : 28.0;
 
-          const Text(
-            'من هنا يمكنك إدارة المستخدمين والسائقين والرحلات وإعدادات التطبيق.',
-            style: TextStyle(
-              fontSize: 15,
-              color: Color(0xFF77778A),
-            ),
-          ),
-
-          const SizedBox(height: 28),
-
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-
-              int columns = 4;
-
-              if (width < 900) {
-                columns = 2;
-              }
-
-              if (width < 600) {
-                columns = 1;
-              }
-
-              return GridView.count(
-                crossAxisCount: columns,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.8,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: const [
-                  _StatCard(
-                    icon: Icons.people_alt_rounded,
-                    title: 'المستخدمون',
-                    value: '—',
-                  ),
-                  _StatCard(
-                    icon: Icons.drive_eta_rounded,
-                    title: 'السائقون',
-                    value: '—',
-                  ),
-                  _StatCard(
-                    icon: Icons.local_taxi_rounded,
-                    title: 'الرحلات',
-                    value: '—',
-                  ),
-                  _StatCard(
-                    icon: Icons.pending_actions_rounded,
-                    title: 'طلبات السائقين',
-                    value: '—',
-                  ),
-                ],
-              );
-            },
-          ),
-
-          const SizedBox(height: 28),
-
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: const Color(0xFFE8E8F0),
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(horizontalPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'مرحبًا بك في لوحة إدارة NUMIZA',
+                style: TextStyle(
+                  fontSize: width < 600 ? 22 : 28,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF151525),
+                ),
               ),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'نظرة عامة',
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
+
+              const SizedBox(height: 8),
+
+              const Text(
+                'من هنا يمكنك إدارة المستخدمين والسائقين والرحلات وإعدادات التطبيق.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF77778A),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              _buildStatsGrid(width),
+
+              const SizedBox(height: 24),
+
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(width < 600 ? 18 : 24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0xFFE8E8F0),
                   ),
                 ),
-                SizedBox(height: 10),
-                Text(
-                  'سيتم ربط هذه الإحصائيات بقاعدة بيانات Supabase في الخطوة التالية.',
-                  style: TextStyle(
-                    color: Color(0xFF77778A),
-                  ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'نظرة عامة',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    Text(
+                      'سيتم ربط هذه الإحصائيات بقاعدة بيانات Supabase في الخطوة التالية.',
+                      style: TextStyle(
+                        color: Color(0xFF77778A),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatsGrid(double width) {
+    int columns;
+
+    if (width < 600) {
+      columns = 1;
+    } else if (width < 950) {
+      columns = 2;
+    } else if (width < 1250) {
+      columns = 3;
+    } else {
+      columns = 4;
+    }
+
+    return GridView.count(
+      crossAxisCount: columns,
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      childAspectRatio: width < 600 ? 2.2 : 1.8,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: const [
+        _StatCard(
+          icon: Icons.people_alt_rounded,
+          title: 'المستخدمون',
+          value: '—',
+        ),
+        _StatCard(
+          icon: Icons.drive_eta_rounded,
+          title: 'السائقون',
+          value: '—',
+        ),
+        _StatCard(
+          icon: Icons.local_taxi_rounded,
+          title: 'الرحلات',
+          value: '—',
+        ),
+        _StatCard(
+          icon: Icons.pending_actions_rounded,
+          title: 'طلبات السائقين',
+          value: '—',
+        ),
+      ],
     );
   }
 }
@@ -732,7 +865,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -749,9 +882,9 @@ class _StatCard extends StatelessWidget {
               color: const Color(0xFF5B4FE9).withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(
-              icon,
-              color: const Color(0xFF5B4FE9),
+            child: const Icon(
+              Icons.dashboard_rounded,
+              color: Color(0xFF5B4FE9),
             ),
           ),
           const SizedBox(width: 14),
@@ -762,6 +895,7 @@ class _StatCard extends StatelessWidget {
               children: [
                 Text(
                   title,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF77778A),
                     fontSize: 13,
@@ -798,30 +932,35 @@ class _ComingSoonPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            size: 64,
-            color: const Color(0xFF5B4FE9),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 64,
+              color: const Color(0xFF5B4FE9),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'سيتم تفعيل هذا القسم في الخطوات القادمة.',
-            style: TextStyle(
-              color: Color(0xFF77778A),
+            const SizedBox(height: 18),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            const Text(
+              'سيتم تفعيل هذا القسم في الخطوات القادمة.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF77778A),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
