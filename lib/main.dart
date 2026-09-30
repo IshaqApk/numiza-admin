@@ -333,10 +333,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   final List<Widget> pages = const [
     _DashboardOverview(),
-    _ComingSoonPage(
-      icon: Icons.people_alt_rounded,
-      title: 'المستخدمون',
-    ),
+    _UsersPage(),
     _ComingSoonPage(
       icon: Icons.drive_eta_rounded,
       title: 'السائقون',
