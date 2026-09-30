@@ -1274,6 +1274,766 @@ class _ComingSoonPage extends StatelessWidget {
   }
 }
 
+class _UsersPage extends StatefulWidget {
+  const _UsersPage();
+
+  @override
+  State<_UsersPage> createState() => _UsersPageState();
+}
+
+class _UsersPageState extends State<_UsersPage> {
+  final TextEditingController searchController = TextEditingController();
+
+  List<Map<String, dynamic>> users = [];
+  bool loading = true;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUsers() async {
+    if (!mounted) return;
+
+    setState(() {
+      loading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select(
+            'id, full_name, phone, role, driver_status, created_at',
+          )
+          .order(
+            'created_at',
+            ascending: false,
+          );
+
+      if (!mounted) return;
+
+      setState(() {
+        users = List<Map<String, dynamic>>.from(response);
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+        errorMessage = 'تعذر تحميل المستخدمين.';
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> get filteredUsers {
+    final query = searchController.text.trim().toLowerCase();
+
+    if (query.isEmpty) {
+      return users;
+    }
+
+    return users.where((user) {
+      final name = user['full_name']?.toString().toLowerCase() ?? '';
+      final phone = user['phone']?.toString().toLowerCase() ?? '';
+      final role = user['role']?.toString().toLowerCase() ?? '';
+
+      return name.contains(query) ||
+          phone.contains(query) ||
+          role.contains(query);
+    }).toList();
+  }
+
+  String _roleText(dynamic role) {
+    switch (role?.toString()) {
+      case 'driver':
+        return 'سائق';
+      case 'admin':
+        return 'مدير';
+      case 'super_admin':
+        return 'مدير رئيسي';
+      default:
+        return 'راكب';
+    }
+  }
+
+  String _driverStatusText(dynamic status) {
+    switch (status?.toString()) {
+      case 'approved':
+        return 'معتمد';
+      case 'pending':
+        return 'قيد المراجعة';
+      case 'rejected':
+        return 'مرفوض';
+      default:
+        return '—';
+    }
+  }
+
+  String _formatDate(dynamic value) {
+    if (value == null) return '—';
+
+    try {
+      final date = DateTime.parse(value.toString()).toLocal();
+
+      return '${date.day.toString().padLeft(2, '0')}/'
+          '${date.month.toString().padLeft(2, '0')}/'
+          '${date.year}';
+    } catch (_) {
+      return '—';
+    }
+  }
+
+  void _showUserDetails(Map<String, dynamic> user) {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        final name = user['full_name']?.toString().trim();
+        final phone = user['phone']?.toString().trim();
+
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            title: const Text(
+              'تفاصيل المستخدم',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _DetailRow(
+                    label: 'الاسم',
+                    value: name == null || name.isEmpty
+                        ? 'بدون اسم'
+                        : name,
+                  ),
+                  _DetailRow(
+                    label: 'الهاتف',
+                    value: phone == null || phone.isEmpty
+                        ? 'غير متوفر'
+                        : phone,
+                  ),
+                  _DetailRow(
+                    label: 'الدور',
+                    value: _roleText(user['role']),
+                  ),
+                  _DetailRow(
+                    label: 'حالة السائق',
+                    value: _driverStatusText(
+                      user['driver_status'],
+                    ),
+                  ),
+                  _DetailRow(
+                    label: 'تاريخ التسجيل',
+                    value: _formatDate(
+                      user['created_at'],
+                    ),
+                  ),
+                  _DetailRow(
+                    label: 'المعرف',
+                    value: user['id']?.toString() ?? '—',
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('إغلاق'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final mobile = constraints.maxWidth < 700;
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(
+            mobile ? 16 : 28,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(mobile),
+
+              const SizedBox(height: 20),
+
+              _buildSearch(),
+
+              const SizedBox(height: 20),
+
+              if (errorMessage != null)
+                _buildError(),
+
+              if (loading)
+                const Padding(
+                  padding: EdgeInsets.only(top: 80),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF5B4FE9),
+                    ),
+                  ),
+                )
+              else if (filteredUsers.isEmpty)
+                _buildEmpty()
+              else
+                _buildUsersList(mobile),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader(bool mobile) {
+    return Row(
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'المستخدمون',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF151525),
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'عرض وإدارة حسابات مستخدمي NUMIZA.',
+                style: TextStyle(
+                  color: Color(0xFF77778A),
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'تحديث',
+          onPressed: loading ? null : _loadUsers,
+          icon: const Icon(
+            Icons.refresh_rounded,
+            color: Color(0xFF5B4FE9),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearch() {
+    return TextField(
+      controller: searchController,
+      onChanged: (_) {
+        setState(() {});
+      },
+      decoration: InputDecoration(
+        hintText: 'ابحث بالاسم أو الهاتف أو الدور...',
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          color: Color(0xFF77778A),
+        ),
+        suffixIcon: searchController.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'مسح',
+                onPressed: () {
+                  searchController.clear();
+                  setState(() {});
+                },
+                icon: const Icon(Icons.clear_rounded),
+              ),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(
+            color: Color(0xFFE8E8F0),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(
+            color: Color(0xFFE8E8F0),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(
+            color: Color(0xFF5B4FE9),
+            width: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUsersList(bool mobile) {
+    final items = filteredUsers;
+
+    if (mobile) {
+      return Column(
+        children: items.map((user) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildMobileUserCard(user),
+          );
+        }).toList(),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFE8E8F0),
+        ),
+      ),
+      child: Column(
+        children: [
+          _buildTableHeader(),
+          const Divider(height: 1),
+          ...items.map(_buildDesktopUserRow),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 16,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              'المستخدم',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF555566),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'الهاتف',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF555566),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              'الدور',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF555566),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              'الحالة',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF555566),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 70,
+            child: Text(
+              'تفاصيل',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF555566),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopUserRow(Map<String, dynamic> user) {
+    final name = user['full_name']?.toString().trim();
+
+    return InkWell(
+      onTap: () => _showUserDetails(user),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 14,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Row(
+                children: [
+                  _UserAvatar(
+                    name: name,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      name == null || name.isEmpty
+                          ? 'بدون اسم'
+                          : name,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF151525),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                user['phone']?.toString().isNotEmpty == true
+                    ? user['phone'].toString()
+                    : 'غير متوفر',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF666677),
+                ),
+              ),
+            ),
+            Expanded(
+              child: _StatusBadge(
+                text: _roleText(user['role']),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                user['role']?.toString() == 'driver'
+                    ? _driverStatusText(
+                        user['driver_status'],
+                      )
+                    : 'نشط',
+                style: const TextStyle(
+                  color: Color(0xFF666677),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 70,
+              child: IconButton(
+                tooltip: 'عرض التفاصيل',
+                onPressed: () => _showUserDetails(user),
+                icon: const Icon(
+                  Icons.visibility_rounded,
+                  color: Color(0xFF5B4FE9),
+                  size: 20,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileUserCard(Map<String, dynamic> user) {
+    final name = user['full_name']?.toString().trim();
+    final role = _roleText(user['role']);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () => _showUserDetails(user),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFE8E8F0),
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                _UserAvatar(
+                  name: name,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name == null || name.isEmpty
+                            ? 'بدون اسم'
+                            : name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color: Color(0xFF151525),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        user['phone']?.toString().isNotEmpty == true
+                            ? user['phone'].toString()
+                            : 'رقم الهاتف غير متوفر',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF77778A),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_left_rounded,
+                  color: Color(0xFF9999AA),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            Row(
+              children: [
+                _StatusBadge(
+                  text: role,
+                ),
+                const SizedBox(width: 8),
+                if (user['role']?.toString() == 'driver')
+                  _StatusBadge(
+                    text: _driverStatusText(
+                      user['driver_status'],
+                    ),
+                  ),
+                const Spacer(),
+                Text(
+                  _formatDate(user['created_at']),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF9999AA),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 80),
+      child: Center(
+        child: Column(
+          children: [
+            const Icon(
+              Icons.people_outline_rounded,
+              size: 64,
+              color: Color(0xFFB0B0C0),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'لا توجد نتائج',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'لم يتم العثور على مستخدمين مطابقين للبحث.',
+              style: TextStyle(
+                color: Color(0xFF77778A),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3F3),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFFFD5D5),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Color(0xFFD64545),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              errorMessage!,
+              style: const TextStyle(
+                color: Color(0xFF9F3030),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _loadUsers,
+            child: const Text('إعادة المحاولة'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class _UserAvatar extends StatelessWidget {
+  final String? name;
+
+  const _UserAvatar({
+    required this.name,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final firstLetter = name != null && name!.isNotEmpty
+        ? name!.trim().characters.first.toUpperCase()
+        : '?';
+
+    return Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFF5B4FE9).withValues(alpha: 0.10),
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        firstLetter,
+        style: const TextStyle(
+          color: Color(0xFF5B4FE9),
+          fontWeight: FontWeight.w900,
+          fontSize: 17,
+        ),
+      ),
+    );
+  }
+}
+
+
+class _StatusBadge extends StatelessWidget {
+  final String text;
+
+  const _StatusBadge({
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFF5B4FE9).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFF5B4FE9),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailRow({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 95,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF77778A),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF151525),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _AdminMenuItem {
   final IconData icon;
