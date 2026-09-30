@@ -1318,6 +1318,8 @@ class _UsersPageState extends State<_UsersPage> {
 
     await _loadUsers();
 
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -1337,7 +1339,7 @@ class _UsersPageState extends State<_UsersPage> {
     );
   }
 }
-
+    
   Future<void> _loadUsers() async {
     if (!mounted) return;
 
