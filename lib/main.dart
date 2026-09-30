@@ -726,19 +726,124 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 }
 
 
-class _DashboardOverview extends StatelessWidget {
+class _DashboardOverview extends StatefulWidget {
   const _DashboardOverview();
+
+  @override
+  State<_DashboardOverview> createState() => _DashboardOverviewState();
+}
+
+class _DashboardOverviewState extends State<_DashboardOverview> {
+  bool loading = true;
+  String? errorMessage;
+
+  int usersCount = 0;
+  int approvedDriversCount = 0;
+  int ridesCount = 0;
+  int activeRidesCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatistics();
+  }
+
+  Future<void> _loadStatistics() async {
+    if (!mounted) return;
+
+    setState(() {
+      loading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      final usersResponse = await supabase
+          .from('profiles')
+          .select('id');
+
+      final driversResponse = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('driver_status', 'approved');
+
+      final ridesResponse = await supabase
+          .from('ride_requests')
+          .select('id');
+
+      final activeRidesResponse = await supabase
+          .from('ride_requests')
+          .select('id')
+          .inFilter(
+            'status',
+            [
+              'searching',
+              'accepted',
+              'driver_arriving',
+              'in_progress',
+            ],
+          );
+
+      if (!mounted) return;
+
+      setState(() {
+        usersCount = (usersResponse as List).length;
+        approvedDriversCount = (driversResponse as List).length;
+        ridesCount = (ridesResponse as List).length;
+        activeRidesCount = (activeRidesResponse as List).length;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+        errorMessage = 'تعذر تحميل إحصائيات لوحة الإدارة.';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-
         final horizontalPadding = width < 600 ? 16.0 : 28.0;
 
-        return SingleChildScrollView(
-          padding: EdgeInsets.all(horizontalPadding),
+        return RefreshIndicator(
+          onRefresh: _loadStatistics,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.all(horizontalPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(width),
+
+                const SizedBox(height: 24),
+
+                if (errorMessage != null)
+                  _buildErrorMessage(),
+
+                _buildStatsGrid(width),
+
+                const SizedBox(height: 24),
+
+                _buildOverviewCard(width),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader(double width) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -750,57 +855,107 @@ class _DashboardOverview extends StatelessWidget {
                   color: const Color(0xFF151525),
                 ),
               ),
-
               const SizedBox(height: 8),
-
               const Text(
-                'من هنا يمكنك إدارة المستخدمين والسائقين والرحلات وإعدادات التطبيق.',
+                'نظرة عامة على المستخدمين والسائقين والرحلات.',
                 style: TextStyle(
                   fontSize: 14,
                   color: Color(0xFF77778A),
                 ),
               ),
-
-              const SizedBox(height: 24),
-
-              _buildStatsGrid(width),
-
-              const SizedBox(height: 24),
-
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(width < 600 ? 18 : 24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: const Color(0xFFE8E8F0),
-                  ),
-                ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'نظرة عامة',
-                      style: TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    Text(
-                      'سيتم ربط هذه الإحصائيات بقاعدة بيانات Supabase في الخطوة التالية.',
-                      style: TextStyle(
-                        color: Color(0xFF77778A),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
-        );
-      },
+        ),
+
+        const SizedBox(width: 12),
+
+        Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: loading ? null : _loadStatistics,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFE8E8F0),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (loading)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF5B4FE9),
+                      ),
+                    )
+                  else
+                    const Icon(
+                      Icons.refresh_rounded,
+                      size: 19,
+                      color: Color(0xFF5B4FE9),
+                    ),
+                  const SizedBox(width: 7),
+                  if (width >= 500)
+                    const Text(
+                      'تحديث',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF5B4FE9),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorMessage() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3F3),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFFFD5D5),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Color(0xFFD64545),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              errorMessage!,
+              style: const TextStyle(
+                color: Color(0xFF9F3030),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _loadStatistics,
+            child: const Text('إعادة المحاولة'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -817,35 +972,114 @@ class _DashboardOverview extends StatelessWidget {
       columns = 4;
     }
 
-    return GridView.count(
-      crossAxisCount: columns,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: width < 600 ? 2.2 : 1.8,
+    final cards = [
+      _StatCard(
+        icon: Icons.people_alt_rounded,
+        title: 'المستخدمون',
+        value: loading ? '...' : usersCount.toString(),
+        subtitle: 'إجمالي الحسابات',
+      ),
+      _StatCard(
+        icon: Icons.drive_eta_rounded,
+        title: 'السائقون',
+        value: loading ? '...' : approvedDriversCount.toString(),
+        subtitle: 'سائقون معتمدون',
+      ),
+      _StatCard(
+        icon: Icons.local_taxi_rounded,
+        title: 'الرحلات',
+        value: loading ? '...' : ridesCount.toString(),
+        subtitle: 'إجمالي الرحلات',
+      ),
+      _StatCard(
+        icon: Icons.route_rounded,
+        title: 'رحلات نشطة',
+        value: loading ? '...' : activeRidesCount.toString(),
+        subtitle: 'قيد التنفيذ أو البحث',
+      ),
+    ];
+
+    return GridView.builder(
+      itemCount: cards.length,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      children: const [
-        _StatCard(
-          icon: Icons.people_alt_rounded,
-          title: 'المستخدمون',
-          value: '—',
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: width < 600 ? 2.3 : 1.75,
+      ),
+      itemBuilder: (context, index) {
+        return cards[index];
+      },
+    );
+  }
+
+  Widget _buildOverviewCard(double width) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(width < 600 ? 18 : 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFE8E8F0),
         ),
-        _StatCard(
-          icon: Icons.drive_eta_rounded,
-          title: 'السائقون',
-          value: '—',
-        ),
-        _StatCard(
-          icon: Icons.local_taxi_rounded,
-          title: 'الرحلات',
-          value: '—',
-        ),
-        _StatCard(
-          icon: Icons.pending_actions_rounded,
-          title: 'طلبات السائقين',
-          value: '—',
-        ),
-      ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.analytics_rounded,
+                color: Color(0xFF5B4FE9),
+              ),
+              SizedBox(width: 10),
+              Text(
+                'حالة المنصة',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF151525),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          _OverviewRow(
+            icon: Icons.people_alt_rounded,
+            title: 'المستخدمون المسجلون',
+            value: loading ? '...' : usersCount.toString(),
+          ),
+
+          const Divider(height: 24),
+
+          _OverviewRow(
+            icon: Icons.drive_eta_rounded,
+            title: 'السائقون المعتمدون',
+            value: loading ? '...' : approvedDriversCount.toString(),
+          ),
+
+          const Divider(height: 24),
+
+          _OverviewRow(
+            icon: Icons.local_taxi_rounded,
+            title: 'إجمالي الرحلات',
+            value: loading ? '...' : ridesCount.toString(),
+          ),
+
+          const Divider(height: 24),
+
+          _OverviewRow(
+            icon: Icons.sync_rounded,
+            title: 'الرحلات النشطة',
+            value: loading ? '...' : activeRidesCount.toString(),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -855,11 +1089,13 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String value;
+  final String subtitle;
 
   const _StatCard({
     required this.icon,
     required this.title,
     required this.value,
+    required this.subtitle,
   });
 
   @override
@@ -882,12 +1118,15 @@ class _StatCard extends StatelessWidget {
               color: const Color(0xFF5B4FE9).withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(
-              Icons.dashboard_rounded,
-              color: Color(0xFF5B4FE9),
+            child: Icon(
+              icon,
+              color: const Color(0xFF5B4FE9),
+              size: 23,
             ),
           ),
+
           const SizedBox(width: 14),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -899,15 +1138,29 @@ class _StatCard extends StatelessWidget {
                   style: const TextStyle(
                     color: Color(0xFF77778A),
                     fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 5),
+
+                const SizedBox(height: 4),
+
                 Text(
                   value,
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF151525),
+                  ),
+                ),
+
+                const SizedBox(height: 2),
+
+                Text(
+                  subtitle,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF9999AA),
                   ),
                 ),
               ],
@@ -919,6 +1172,61 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+
+class _OverviewRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+
+  const _OverviewRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: const Color(0xFF5B4FE9).withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(
+            icon,
+            size: 19,
+            color: const Color(0xFF5B4FE9),
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF555566),
+            ),
+          ),
+        ),
+
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF151525),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _ComingSoonPage extends StatelessWidget {
   final IconData icon;
