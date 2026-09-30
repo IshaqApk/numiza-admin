@@ -310,4 +310,32 @@ class AdminDashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'NUMIZA Admin',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'تسجيل الخروج',
+              onPressed: () => logout(context),
+              icon: const Icon(Icons.logout_rounded),
+            ),
+          ],
+        ),
+        body: const Center(
+          child: Text(
+            'مرحبًا بك في لوحة إدارة NUMIZA',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
