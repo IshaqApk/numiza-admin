@@ -106,17 +106,47 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       );
 
       if (response.user == null) {
-        showMessage('تعذر تسجيل الدخول.');
-        return;
-      }
+  showMessage('تعذر تسجيل الدخول.');
+  return;
+}
 
-      if (!mounted) return;
+final user = response.user!;
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const AdminDashboardScreen(),
-        ),
-      );
+final admin = await Supabase.instance.client
+    .from('admin_users')
+    .select('id, full_name, role, is_active')
+    .eq('id', user.id)
+    .maybeSingle();
+
+if (admin == null) {
+  await Supabase.instance.client.auth.signOut();
+
+  showMessage(
+    'هذا الحساب غير مصرح له بالدخول إلى لوحة الإدارة.',
+  );
+  return;
+}
+
+final isActive = admin['is_active'] == true;
+final role = admin['role']?.toString();
+
+if (!isActive ||
+    (role != 'super_admin' && role != 'admin')) {
+  await Supabase.instance.client.auth.signOut();
+
+  showMessage(
+    'ليس لديك صلاحية للوصول إلى لوحة الإدارة.',
+  );
+  return;
+}
+
+if (!mounted) return;
+
+Navigator.of(context).pushReplacement(
+  MaterialPageRoute(
+    builder: (_) => const AdminDashboardScreen(),
+  ),
+);
     } on AuthException catch (e) {
       showMessage(e.message);
     } catch (_) {
